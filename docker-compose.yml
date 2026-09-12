@@ -1,0 +1,20 @@
+services:
+  vaultcloud-tma:
+    build: .
+    container_name: vaultcloud-tma
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - DEMO_MODE=${DEMO_MODE:-true}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-mock_bot_token}
+      - TELEGRAM_STORAGE_CHAT_ID=${TELEGRAM_STORAGE_CHAT_ID:-mock_chat_id}
+      - DATABASE_PATH=/data/vaultcloud.db
+      - APP_URL=${APP_URL:-http://localhost:8080}
+    volumes:
+      - vaultcloud_data:/data
+
+volumes:
+  vaultcloud_data:
