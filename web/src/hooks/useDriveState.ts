@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useTransition } from 'react';
+import { useState, useEffect, useCallback, useTransition, useRef } from 'react';
+import JSZip from 'jszip';
 import { FolderItem, FileItem, BreadcrumbItem, VaultStatusResponse, UploadProgressItem } from '../types/vfs';
 import { deriveKey, hexToSalt, saltToHex, generateSalt } from '../crypto/keyDerivation';
 import { encryptChunk, decryptChunk, sliceFileIntoChunks, reassembleFile } from '../crypto/chunkCrypt';
 import { createVerificationCipher, verifyPassphraseKey } from '../crypto/keyBackup';
+import { generateEncryptedThumbnail } from '../crypto/thumbnail';
 import { useTelegram } from './useTelegram';
 
 export function useDriveState() {
@@ -26,6 +28,22 @@ export function useDriveState() {
   const [activeTab, setActiveTab] = useState<'all' | 'starred' | 'trash'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Multi-File Selection State
+  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
+  // Inactivity & PIN Lock State
+  const [isPinLocked, setIsPinLocked] = useState(false);
+  const [pinCode, setPinCode] = useState<string | null>(() => localStorage.getItem('vaultcloud_pin') || null);
+  const [autoLockMinutes, setAutoLockMinutesState] = useState<number>(() => {
+    const saved = localStorage.getItem('vaultcloud_autolock');
+    return saved ? parseInt(saved, 10) || 5 : 5;
+  });
+  const lastActiveRef = useRef<number>(Date.now());
+
+  // Inbox Ingestion State
+  const [isEncryptingInbox, setIsEncryptingInbox] = useState(false);
 
   // Upload Queue State
   const [uploadProgress, setUploadProgress] = useState<UploadProgressItem | null>(null);
@@ -125,6 +143,48 @@ export function useDriveState() {
     refreshItems();
   }, [refreshItems]);
 
+  // Clear selection on folder navigation or tab switch
+  useEffect(() => {
+    setSelectedFileIds([]);
+  }, [currentFolderId, activeTab]);
+
+  // Inactivity auto-lock listener
+  useEffect(() => {
+    if (!isUnlocked) return;
+
+    const resetTimer = () => {
+      lastActiveRef.current = Date.now();
+    };
+
+    window.addEventListener('mousemove', resetTimer, { passive: true });
+    window.addEventListener('keydown', resetTimer, { passive: true });
+    window.addEventListener('touchstart', resetTimer, { passive: true });
+    window.addEventListener('click', resetTimer, { passive: true });
+
+    const interval = setInterval(() => {
+      const inactiveMs = Date.now() - lastActiveRef.current;
+      const thresholdMs = autoLockMinutes * 60 * 1000;
+
+      if (inactiveMs >= thresholdMs) {
+        if (pinCode) {
+          setIsPinLocked(true);
+        } else {
+          setMasterKey(null);
+          setIsUnlocked(false);
+        }
+        showToast('Session locked due to inactivity.', false);
+      }
+    }, 15000);
+
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('touchstart', resetTimer);
+      window.removeEventListener('click', resetTimer);
+      clearInterval(interval);
+    };
+  }, [isUnlocked, autoLockMinutes, pinCode, showToast]);
+
   // Unlock Vault with Master Passphrase
   const unlockVault = useCallback(async (passphrase: string): Promise<boolean> => {
     try {
@@ -140,7 +200,6 @@ export function useDriveState() {
 
       const derivedKey = await deriveKey(passphrase, salt);
 
-      // If existing vault has verification token, verify it
       if (vaultStatus?.verificationCipherHex) {
         const isValid = await verifyPassphraseKey(vaultStatus.verificationCipherHex, derivedKey);
         if (!isValid) {
@@ -149,7 +208,6 @@ export function useDriveState() {
         }
       }
 
-      // If new vault, initialize with salt and verification cipher
       if (isNewVault) {
         const saltHex = saltToHex(salt);
         const verificationCipherHex = await createVerificationCipher(derivedKey);
@@ -165,8 +223,10 @@ export function useDriveState() {
       startTransition(() => {
         setMasterKey(derivedKey);
         setIsUnlocked(true);
+        setIsPinLocked(false);
       });
 
+      lastActiveRef.current = Date.now();
       haptics.notification('success');
       showToast('Vault unlocked with zero-knowledge master key.');
       return true;
@@ -177,13 +237,74 @@ export function useDriveState() {
     }
   }, [vaultStatus, apiFetch, refreshVaultStatus, showToast, haptics]);
 
-  // Lock Vault
+  // Lock Vault Completely
   const lockVault = useCallback(() => {
     setMasterKey(null);
     setIsUnlocked(false);
+    setIsPinLocked(false);
+    setSelectedFileIds([]);
     haptics.impact('medium');
     showToast('Vault locked. Cryptographic keys purged from memory.');
   }, [haptics, showToast]);
+
+  // Quick PIN lock
+  const lockWithPin = useCallback(() => {
+    if (!pinCode) {
+      lockVault();
+      return;
+    }
+    setIsPinLocked(true);
+    haptics.impact('light');
+    showToast('Vault quick-locked with PIN.');
+  }, [pinCode, lockVault, haptics, showToast]);
+
+  const unlockWithPin = useCallback((enteredPin: string): boolean => {
+    if (enteredPin === pinCode) {
+      setIsPinLocked(false);
+      lastActiveRef.current = Date.now();
+      haptics.notification('success');
+      showToast('Quick PIN verified.');
+      return true;
+    }
+    haptics.notification('error');
+    return false;
+  }, [pinCode, haptics, showToast]);
+
+  const setPin = useCallback((newPin: string | null) => {
+    if (newPin) {
+      localStorage.setItem('vaultcloud_pin', newPin);
+      setPinCode(newPin);
+      showToast('Quick PIN set successfully.');
+    } else {
+      localStorage.removeItem('vaultcloud_pin');
+      setPinCode(null);
+      showToast('Quick PIN disabled.');
+    }
+    haptics.selection();
+  }, [haptics, showToast]);
+
+  const setAutoLockMinutes = useCallback((minutes: number) => {
+    localStorage.setItem('vaultcloud_autolock', minutes.toString());
+    setAutoLockMinutesState(minutes);
+    showToast(`Auto-lock interval set to ${minutes} minute${minutes > 1 ? 's' : ''}.`);
+  }, [showToast]);
+
+  // Selection handlers
+  const toggleSelectFile = useCallback((fileId: string) => {
+    setSelectedFileIds((prev) =>
+      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
+    );
+    haptics.selection();
+  }, [haptics]);
+
+  const selectAllFiles = useCallback(() => {
+    setSelectedFileIds(files.map((f) => f.id));
+    haptics.selection();
+  }, [files, haptics]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedFileIds([]);
+  }, []);
 
   // Navigation: Change Folder
   const navigateToFolder = useCallback((folderId: string | null) => {
@@ -226,7 +347,7 @@ export function useDriveState() {
     }
   }, [apiFetch, refreshItems, refreshVaultStatus, showToast, haptics]);
 
-  // Upload File with Client-Side Chunking & Encryption
+  // Upload File with Client-Side Chunking, Thumbnails & Encryption
   const uploadFile = useCallback(async (file: File) => {
     if (!masterKey) {
       showToast('Unlock vault before uploading files', true);
@@ -247,6 +368,16 @@ export function useDriveState() {
     });
 
     try {
+      // Generate client-side thumbnail if image
+      let thumbnailCipherHex: string | null = null;
+      if (file.type.startsWith('image/')) {
+        try {
+          thumbnailCipherHex = await generateEncryptedThumbnail(file, masterKey);
+        } catch (thumbErr) {
+          console.warn('Thumbnail generation skipped:', thumbErr);
+        }
+      }
+
       // 1. Create file record in VFS
       const initRes = await apiFetch('/api/vfs/files', {
         method: 'POST',
@@ -258,6 +389,7 @@ export function useDriveState() {
           mimeType: file.type || 'application/octet-stream',
           totalSizeBytes: file.size,
           chunkCount: chunks.length,
+          thumbnailCipherHex,
         }),
       });
 
@@ -329,14 +461,12 @@ export function useDriveState() {
       throw new Error('Vault is locked. Decryption key missing.');
     }
 
-    // Fetch full file record with chunk list
     const fileRes = await apiFetch(`/api/vfs/files/${fileItem.id}`);
     if (!fileRes.ok) throw new Error('File manifest not found');
     const fileWithChunks: FileItem = await fileRes.json();
 
     const chunkRecords = fileWithChunks.chunks || [];
     if (chunkRecords.length === 0) {
-      // In demo mode without chunks, return empty simulated blob
       return new Blob(['Demo unencrypted preview content'], { type: fileItem.mime_type });
     }
 
@@ -349,7 +479,6 @@ export function useDriveState() {
       }
       const encryptedBuffer = await chunkRes.arrayBuffer();
 
-      // Check if it's the raw demo text fallback
       if (encryptedBuffer.byteLength < 12) {
         decryptedChunks.push(encryptedBuffer);
         continue;
@@ -359,13 +488,304 @@ export function useDriveState() {
         const decrypted = await decryptChunk(encryptedBuffer, masterKey);
         decryptedChunks.push(decrypted);
       } catch {
-        // Fallback for pre-seeded unencrypted demo files
         decryptedChunks.push(encryptedBuffer);
       }
     }
 
     return reassembleFile(decryptedChunks, fileItem.mime_type);
   }, [masterKey, apiFetch]);
+
+  // Save Encrypted Markdown Note
+  const saveEncryptedNote = useCallback(async (
+    title: string,
+    content: string,
+    existingFileId?: string
+  ) => {
+    if (!masterKey) {
+      showToast('Vault is locked', true);
+      return;
+    }
+
+    try {
+      const encoder = new TextEncoder();
+      const contentBuffer = encoder.encode(content).buffer;
+      const encrypted = await encryptChunk(contentBuffer, masterKey);
+      const noteFileId = existingFileId || `note_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+      if (!existingFileId) {
+        const createRes = await apiFetch('/api/vfs/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: noteFileId,
+            folderId: currentFolderId,
+            name: title,
+            mimeType: 'text/markdown',
+            totalSizeBytes: contentBuffer.byteLength,
+            chunkCount: 1,
+          }),
+        });
+        if (!createRes.ok) throw new Error('Failed to create note record');
+      } else {
+        await apiFetch(`/api/vfs/files/${existingFileId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: title }),
+        });
+      }
+
+      const formData = new FormData();
+      formData.append('fileId', noteFileId);
+      formData.append('chunkIndex', '0');
+      formData.append('sha256Hash', encrypted.cipherHashHex);
+      const chunkBlob = new Blob([encrypted.chunkBufferWithIv], { type: 'application/octet-stream' });
+      formData.append('chunk', chunkBlob, 'note_chunk_0.enc');
+
+      const uploadRes = await apiFetch('/api/chunks/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!uploadRes.ok) throw new Error('Failed to upload encrypted note');
+
+      haptics.notification('success');
+      showToast(`Note "${title}" saved and encrypted.`);
+      await refreshItems();
+      await refreshVaultStatus();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save note';
+      showToast(msg, true);
+    }
+  }, [masterKey, currentFolderId, apiFetch, refreshItems, refreshVaultStatus, showToast, haptics]);
+
+  // Batch Operations
+  const handleBatchTrash = useCallback(async (fileIds: string[], isTrash: boolean) => {
+    try {
+      const res = await apiFetch('/api/vfs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: isTrash ? 'trash' : 'restore',
+          fileIds,
+        }),
+      });
+      if (!res.ok) throw new Error('Batch operation failed');
+      setSelectedFileIds([]);
+      showToast(`${fileIds.length} item(s) ${isTrash ? 'moved to Trash' : 'restored'}.`);
+      await refreshItems();
+      await refreshVaultStatus();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Batch trash error';
+      showToast(msg, true);
+    }
+  }, [apiFetch, refreshItems, refreshVaultStatus, showToast]);
+
+  const handleBatchStar = useCallback(async (fileIds: string[], isStarred: boolean) => {
+    try {
+      const res = await apiFetch('/api/vfs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: isStarred ? 'star' : 'unstar',
+          fileIds,
+        }),
+      });
+      if (!res.ok) throw new Error('Batch star failed');
+      setSelectedFileIds([]);
+      showToast(`${fileIds.length} item(s) ${isStarred ? 'starred' : 'unstarred'}.`);
+      await refreshItems();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Batch star error';
+      showToast(msg, true);
+    }
+  }, [apiFetch, refreshItems, showToast]);
+
+  const handleBatchMove = useCallback(async (fileIds: string[], targetFolderId: string | null) => {
+    try {
+      const res = await apiFetch('/api/vfs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'move',
+          fileIds,
+          targetFolderId,
+        }),
+      });
+      if (!res.ok) throw new Error('Batch move failed');
+      setSelectedFileIds([]);
+      showToast(`${fileIds.length} item(s) moved.`);
+      await refreshItems();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Batch move error';
+      showToast(msg, true);
+    }
+  }, [apiFetch, refreshItems, showToast]);
+
+  const handleBatchPurge = useCallback(async (fileIds: string[]) => {
+    try {
+      const res = await apiFetch('/api/vfs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'purge',
+          fileIds,
+        }),
+      });
+      if (!res.ok) throw new Error('Batch purge failed');
+      setSelectedFileIds([]);
+      showToast(`${fileIds.length} item(s) permanently deleted.`);
+      await refreshItems();
+      await refreshVaultStatus();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Batch purge error';
+      showToast(msg, true);
+    }
+  }, [apiFetch, refreshItems, refreshVaultStatus, showToast]);
+
+  // Download selected files as in-memory decrypted ZIP
+  const handleDownloadBatchZip = useCallback(async (fileIds: string[]) => {
+    if (!masterKey) return;
+    setIsDownloadingZip(true);
+    try {
+      const zip = new JSZip();
+      const filesToDownload = files.filter((f) => fileIds.includes(f.id));
+
+      for (const fileItem of filesToDownload) {
+        try {
+          const blob = await decryptAndDownloadFile(fileItem);
+          zip.file(fileItem.name, blob);
+        } catch (fileErr) {
+          console.error(`Failed to decrypt file ${fileItem.name} for zip:`, fileErr);
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vaultcloud_selection_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast(`ZIP archive of ${filesToDownload.length} files generated and downloaded.`);
+      setSelectedFileIds([]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'ZIP generation failed';
+      showToast(msg, true);
+    } finally {
+      setIsDownloadingZip(false);
+    }
+  }, [masterKey, files, decryptAndDownloadFile, showToast]);
+
+  // Full Vault Export & Disaster Recovery Archive
+  const exportFullVaultZip = useCallback(async () => {
+    if (!masterKey) {
+      showToast('Unlock vault before exporting', true);
+      return;
+    }
+
+    showToast('Preparing full vault export archive...');
+    try {
+      const res = await apiFetch('/api/vfs/files');
+      if (!res.ok) throw new Error('Failed to retrieve file list for export');
+      const data = await res.json();
+      const allFiles: FileItem[] = data.files || [];
+
+      const nonTrashFiles = allFiles.filter((f) => f.is_trash === 0);
+      const zip = new JSZip();
+
+      const manifestData = {
+        exportedAt: new Date().toISOString(),
+        totalFiles: nonTrashFiles.length,
+        version: '1.0.0',
+        files: nonTrashFiles.map((f) => ({
+          name: f.name,
+          sizeBytes: f.total_size_bytes,
+          mimeType: f.mime_type,
+          createdAt: f.created_at,
+        })),
+      };
+
+      zip.file('vaultcloud_manifest.json', JSON.stringify(manifestData, null, 2));
+
+      for (const f of nonTrashFiles) {
+        try {
+          const blob = await decryptAndDownloadFile(f);
+          zip.file(f.name, blob);
+        } catch (fErr) {
+          console.warn(`Could not export file ${f.name}:`, fErr);
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vaultcloud_full_backup_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('Full vault backup successfully downloaded!');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Export failed';
+      showToast(msg, true);
+    }
+  }, [masterKey, apiFetch, decryptAndDownloadFile, showToast]);
+
+  // Vault Inbox Files (Ingest unencrypted files sent to bot)
+  const vaultInboxFiles = useCallback(async () => {
+    if (!masterKey) return;
+    setIsEncryptingInbox(true);
+    try {
+      const inboxRes = await apiFetch('/api/vfs/inbox');
+      if (!inboxRes.ok) throw new Error('Failed to fetch inbox files');
+      const inboxData = await inboxRes.json();
+      const inboxFiles: FileItem[] = inboxData.files || [];
+
+      for (const item of inboxFiles) {
+        const chunkRes = await apiFetch(`/api/chunks/${item.id}/0`);
+        if (!chunkRes.ok) continue;
+        const rawBuf = await chunkRes.arrayBuffer();
+
+        const encrypted = await encryptChunk(rawBuf, masterKey);
+
+        const formData = new FormData();
+        formData.append('fileId', item.id);
+        formData.append('chunkIndex', '0');
+        formData.append('sha256Hash', encrypted.cipherHashHex);
+        const chunkBlob = new Blob([encrypted.chunkBufferWithIv], { type: 'application/octet-stream' });
+        formData.append('chunk', chunkBlob, 'chunk_0.enc');
+
+        await apiFetch('/api/chunks/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        await apiFetch('/api/vfs/inbox/vault', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileId: item.id,
+            totalSizeBytes: rawBuf.byteLength,
+            chunkCount: 1,
+          }),
+        });
+      }
+
+      haptics.notification('success');
+      showToast(`Encrypted and vaulted ${inboxFiles.length} file(s) from Telegram inbox.`);
+      await refreshItems();
+      await refreshVaultStatus();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Inbox vaulting failed';
+      showToast(msg, true);
+    } finally {
+      setIsEncryptingInbox(false);
+    }
+  }, [masterKey, apiFetch, refreshItems, refreshVaultStatus, showToast, haptics]);
 
   // Star / Unstar
   const toggleStar = useCallback(async (fileId: string, currentStarred: number) => {
@@ -445,6 +865,15 @@ export function useDriveState() {
     unlockVault,
     lockVault,
 
+    // PIN Lock & Inactivity
+    isPinLocked,
+    hasPin: Boolean(pinCode),
+    autoLockMinutes,
+    unlockWithPin,
+    setPin,
+    setAutoLockMinutes,
+    lockWithPin,
+
     // Navigation & Data
     currentFolderId,
     breadcrumbs,
@@ -462,15 +891,33 @@ export function useDriveState() {
     viewMode,
     setViewMode,
 
+    // Multi-File Selection
+    selectedFileIds,
+    toggleSelectFile,
+    selectAllFiles,
+    clearSelection,
+    isDownloadingZip,
+    handleBatchTrash,
+    handleBatchStar,
+    handleBatchMove,
+    handleBatchPurge,
+    handleDownloadBatchZip,
+
     // Actions
     createFolder,
     deleteFolder,
     uploadFile,
     decryptAndDownloadFile,
+    saveEncryptedNote,
+    exportFullVaultZip,
     toggleStar,
     toggleTrash,
     purgeFile,
     renameFile,
+
+    // Inbox Ingestion
+    vaultInboxFiles,
+    isEncryptingInbox,
 
     // UI Progress & Toasts
     uploadProgress,

@@ -153,4 +153,62 @@ describe('Server Virtual File System (VFS)', () => {
     expect(vfs.getFolder(testUser, folder.id)).toBeNull();
     expect(vfs.getFile(testUser, file.id)).toBeNull();
   });
+
+  it('performs batch trash, restore, star, unstar, move, and purge', () => {
+    const f1 = vfs.createFile(testUser, { name: 'f1.txt', mimeType: 'text/plain', totalSizeBytes: 10, chunkCount: 1 });
+    const f2 = vfs.createFile(testUser, { name: 'f2.txt', mimeType: 'text/plain', totalSizeBytes: 20, chunkCount: 1 });
+    const folder = vfs.createFolder(testUser, 'ArchiveFolder');
+
+    // Batch star
+    vfs.batchStar(testUser, [f1.id, f2.id], true);
+    expect(vfs.listFiles(testUser, { starred: true })).toHaveLength(2);
+
+    // Batch move
+    vfs.batchMove(testUser, [f1.id, f2.id], folder.id);
+    expect(vfs.listFiles(testUser, { folderId: folder.id })).toHaveLength(2);
+
+    // Batch trash
+    vfs.batchTrash(testUser, [f1.id, f2.id], true);
+    expect(vfs.listFiles(testUser, { trash: true })).toHaveLength(2);
+
+    // Batch restore
+    vfs.batchTrash(testUser, [f1.id], false);
+    expect(vfs.listFiles(testUser, { trash: true })).toHaveLength(1);
+
+    // Batch purge
+    vfs.batchPurge(testUser, [f1.id, f2.id]);
+    expect(vfs.getFile(testUser, f1.id)).toBeNull();
+    expect(vfs.getFile(testUser, f2.id)).toBeNull();
+  });
+
+  it('records Telegram bot chat drop into inbox and transitions to vaulted state', () => {
+    const inboxItem = vfs.createFile(testUser, {
+      name: 'receipt.jpg',
+      mimeType: 'image/jpeg',
+      totalSizeBytes: 45000,
+      chunkCount: 1,
+      isEncrypted: 0,
+    });
+
+    expect(inboxItem.is_encrypted).toBe(0);
+    expect(inboxItem.folder_id).toBeNull();
+
+    // Verify inbox file retrieval
+    const pendingList = vfs.getInboxFiles(testUser);
+    expect(pendingList).toHaveLength(1);
+    expect(pendingList[0].id).toBe(inboxItem.id);
+
+    // Verify vaulting inbox file with encrypted chunks and thumbnail
+    vfs.vaultInboxFile(testUser, inboxItem.id, {
+      totalSizeBytes: 45028,
+      chunkCount: 1,
+      thumbnailCipherHex: 'aabbccdd11223344',
+    });
+
+    const vaultedItem = vfs.getFile(testUser, inboxItem.id);
+    expect(vaultedItem?.is_encrypted).toBe(1);
+    expect(vaultedItem?.thumbnail_cipher_hex).toBe('aabbccdd11223344');
+    expect(vfs.getInboxFiles(testUser)).toHaveLength(0);
+  });
 });
+

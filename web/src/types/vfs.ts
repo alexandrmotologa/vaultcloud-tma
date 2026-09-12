@@ -16,6 +16,8 @@ export interface FileItem {
   chunk_count: number;
   is_starred: number;
   is_trash: number;
+  thumbnail_cipher_hex?: string | null;
+  is_encrypted?: number;
   created_at: number;
   updated_at: number;
   chunks?: ChunkItem[];
@@ -46,6 +48,7 @@ export interface VaultStatusResponse {
     totalSizeBytes: number;
     folderCount: number;
   };
+  inboxPendingCount?: number;
 }
 
 export interface UploadProgressItem {

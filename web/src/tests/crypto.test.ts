@@ -96,4 +96,39 @@ describe('VaultCloud Cryptographic Engine', () => {
     expect(evaluatePassphraseStrength('Abcdefgh123!').score).toBe(3);
     expect(evaluatePassphraseStrength('LongPasswordWithSymbols123!@#').score).toBe(4);
   });
+
+  it('exports, imports, wraps and unwraps zero-knowledge share keys', async () => {
+    const { generateFileKey, exportKeyToHex, importKeyFromHex, wrapFileKey, unwrapFileKey, buildShareLink, parseShareHash } = await import('../crypto/shareKey');
+    const salt = generateSalt();
+    const masterKey = await deriveKey('MasterKeySecret123!', salt);
+
+    const fileKey = await generateFileKey();
+    const keyHex = await exportKeyToHex(fileKey);
+    expect(keyHex).toHaveLength(64);
+
+    const importedKey = await importKeyFromHex(keyHex);
+    expect(importedKey).toBeDefined();
+
+    // Verify key wrapping
+    const wrappedHex = await wrapFileKey(fileKey, masterKey);
+    expect(typeof wrappedHex).toBe('string');
+
+    const unwrappedKey = await unwrapFileKey(wrappedHex, masterKey);
+    const unwrappedHex = await exportKeyToHex(unwrappedKey);
+    expect(unwrappedHex).toBe(keyHex);
+
+    // Verify share link generation and hash parsing
+    const shareUrl = buildShareLink('file_123', keyHex, 'test.pdf', 1024, 'application/pdf');
+    expect(shareUrl).toContain('#share=file_123');
+    expect(shareUrl).toContain(`key=${keyHex}`);
+
+    const hash = shareUrl.split('#')[1];
+    const parsed = parseShareHash(hash);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.fileId).toBe('file_123');
+    expect(parsed?.keyHex).toBe(keyHex);
+    expect(parsed?.name).toBe('test.pdf');
+    expect(parsed?.size).toBe(1024);
+  });
 });
+

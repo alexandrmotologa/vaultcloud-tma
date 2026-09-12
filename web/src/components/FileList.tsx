@@ -13,6 +13,10 @@ import {
   Download,
   Eye,
   RotateCcw,
+  Share2,
+  Edit3,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { FolderItem, FileItem } from '../types/vfs';
 
@@ -22,10 +26,14 @@ interface FileListProps {
   onNavigateFolder: (folderId: string) => void;
   onPreviewFile: (file: FileItem) => void;
   onDownloadFile: (file: FileItem) => void;
+  onShareFile: (file: FileItem) => void;
+  onEditNote: (file: FileItem) => void;
   onToggleStar: (fileId: string, currentStarred: number) => void;
   onToggleTrash: (fileId: string, currentTrash: number) => void;
   onPurgeFile: (fileId: string) => void;
   isTrashView: boolean;
+  selectedFileIds: string[];
+  onToggleSelectFile: (fileId: string) => void;
 }
 
 export const FileList: React.FC<FileListProps> = ({
@@ -34,10 +42,14 @@ export const FileList: React.FC<FileListProps> = ({
   onNavigateFolder,
   onPreviewFile,
   onDownloadFile,
+  onShareFile,
+  onEditNote,
   onToggleStar,
   onToggleTrash,
   onPurgeFile,
   isTrashView,
+  selectedFileIds,
+  onToggleSelectFile,
 }) => {
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -79,12 +91,18 @@ export const FileList: React.FC<FileListProps> = ({
     return <GenericFile className="w-4 h-4 text-slate-400" />;
   };
 
+  const isNoteFile = (name: string) => {
+    const ext = name.split('.').pop()?.toLowerCase() || '';
+    return ['md', 'txt'].includes(ext);
+  };
+
   return (
     <div className="bg-vault-card border border-slate-800 rounded-2xl overflow-hidden pb-16">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs text-slate-300">
           <thead className="bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
             <tr>
+              <th className="py-2.5 px-3 w-8"></th>
               <th className="py-2.5 px-3">Name</th>
               <th className="py-2.5 px-3 hidden sm:table-cell">Size</th>
               <th className="py-2.5 px-3 hidden md:table-cell">Chunks</th>
@@ -101,6 +119,7 @@ export const FileList: React.FC<FileListProps> = ({
                   onClick={() => onNavigateFolder(folder.id)}
                   className="hover:bg-slate-800/40 cursor-pointer transition-colors"
                 >
+                  <td className="py-2.5 px-3 text-slate-500"></td>
                   <td className="py-2.5 px-3 flex items-center gap-2.5 font-medium text-slate-200">
                     <Folder className="w-4 h-4 text-blue-400 fill-blue-500/20 shrink-0" />
                     <span className="truncate max-w-[200px] sm:max-w-xs">{folder.name}</span>
@@ -117,82 +136,116 @@ export const FileList: React.FC<FileListProps> = ({
               ))}
 
             {/* Files */}
-            {files.map((file) => (
-              <tr
-                key={file.id}
-                className="hover:bg-slate-800/40 transition-colors"
-              >
-                <td
-                  onClick={() => onPreviewFile(file)}
-                  className="py-2.5 px-3 flex items-center gap-2.5 font-medium text-slate-200 cursor-pointer"
+            {files.map((file) => {
+              const isSelected = selectedFileIds.includes(file.id);
+
+              return (
+                <tr
+                  key={file.id}
+                  className={`hover:bg-slate-800/40 transition-colors ${
+                    isSelected ? 'bg-blue-950/20' : ''
+                  }`}
                 >
-                  {getFileIcon(file.mime_type, file.name)}
-                  <span className="truncate max-w-[180px] sm:max-w-xs">{file.name}</span>
-                </td>
-                <td className="py-2.5 px-3 text-slate-400 hidden sm:table-cell">
-                  {formatBytes(file.total_size_bytes)}
-                </td>
-                <td className="py-2.5 px-3 font-mono text-slate-400 hidden md:table-cell">
-                  {file.chunk_count}
-                </td>
-                <td className="py-2.5 px-3 text-slate-400 hidden sm:table-cell">
-                  {formatDate(file.updated_at)}
-                </td>
-                <td className="py-2.5 px-3 text-right space-x-1.5 whitespace-nowrap">
-                  {!isTrashView ? (
-                    <>
-                      <button
-                        onClick={() => onToggleStar(file.id, file.is_starred)}
-                        className={`p-1 rounded hover:bg-slate-700/50 ${
-                          file.is_starred ? 'text-amber-400 fill-amber-400' : 'text-slate-500'
-                        }`}
-                        title="Star"
-                      >
-                        <Star className={`w-3.5 h-3.5 ${file.is_starred ? 'fill-amber-400' : ''}`} />
-                      </button>
-                      <button
-                        onClick={() => onPreviewFile(file)}
-                        className="p-1 rounded text-blue-400 hover:bg-slate-700/50"
-                        title="Preview"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onDownloadFile(file)}
-                        className="p-1 rounded text-emerald-400 hover:bg-slate-700/50"
-                        title="Download"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onToggleTrash(file.id, file.is_trash)}
-                        className="p-1 rounded text-rose-400 hover:bg-slate-700/50"
-                        title="Move to Trash"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => onToggleTrash(file.id, file.is_trash)}
-                        className="p-1 rounded text-emerald-400 hover:bg-slate-700/50"
-                        title="Restore"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onPurgeFile(file.id)}
-                        className="p-1 rounded text-rose-400 hover:bg-slate-700/50"
-                        title="Permanently Delete"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  <td className="py-2.5 px-3 text-center">
+                    <button
+                      onClick={() => onToggleSelectFile(file.id)}
+                      className="text-slate-400 hover:text-white"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-4 h-4 text-blue-400" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                  </td>
+                  <td
+                    onClick={() => onPreviewFile(file)}
+                    className="py-2.5 px-3 flex items-center gap-2.5 font-medium text-slate-200 cursor-pointer"
+                  >
+                    {getFileIcon(file.mime_type, file.name)}
+                    <span className="truncate max-w-[180px] sm:max-w-xs">{file.name}</span>
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-400 hidden sm:table-cell">
+                    {formatBytes(file.total_size_bytes)}
+                  </td>
+                  <td className="py-2.5 px-3 font-mono text-slate-400 hidden md:table-cell">
+                    {file.chunk_count}
+                  </td>
+                  <td className="py-2.5 px-3 text-slate-400 hidden sm:table-cell">
+                    {formatDate(file.updated_at)}
+                  </td>
+                  <td className="py-2.5 px-3 text-right space-x-1 whitespace-nowrap">
+                    {!isTrashView ? (
+                      <>
+                        <button
+                          onClick={() => onToggleStar(file.id, file.is_starred)}
+                          className={`p-1 rounded hover:bg-slate-700/50 ${
+                            file.is_starred ? 'text-amber-400 fill-amber-400' : 'text-slate-500'
+                          }`}
+                          title="Star"
+                        >
+                          <Star className={`w-3.5 h-3.5 ${file.is_starred ? 'fill-amber-400' : ''}`} />
+                        </button>
+                        {isNoteFile(file.name) && (
+                          <button
+                            onClick={() => onEditNote(file)}
+                            className="p-1 rounded text-cyan-400 hover:bg-slate-700/50"
+                            title="Edit Note"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onShareFile(file)}
+                          className="p-1 rounded text-sky-400 hover:bg-slate-700/50"
+                          title="Share Link (#key)"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onPreviewFile(file)}
+                          className="p-1 rounded text-blue-400 hover:bg-slate-700/50"
+                          title="Preview"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onDownloadFile(file)}
+                          className="p-1 rounded text-emerald-400 hover:bg-slate-700/50"
+                          title="Download"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onToggleTrash(file.id, file.is_trash)}
+                          className="p-1 rounded text-rose-400 hover:bg-slate-700/50"
+                          title="Move to Trash"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onToggleTrash(file.id, file.is_trash)}
+                          className="p-1 rounded text-emerald-400 hover:bg-slate-700/50"
+                          title="Restore"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onPurgeFile(file.id)}
+                          className="p-1 rounded text-rose-400 hover:bg-slate-700/50"
+                          title="Permanently Delete"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

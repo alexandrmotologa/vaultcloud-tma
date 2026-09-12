@@ -159,3 +159,54 @@ Response:
 
 #### GET /api/chunks/:fileId/:chunkIndex
 Streams raw encrypted chunk bytes back to the client for local decryption.
+
+---
+
+### 4. Batch Operations
+
+#### POST /api/vfs/batch
+Performs batch operations on multiple files at once.
+
+Request:
+```json
+{
+  "action": "trash",
+  "fileIds": ["file_1", "file_2"],
+  "targetFolderId": null
+}
+```
+
+Actions supported:
+- `trash`: soft deletes files
+- `restore`: restores files from trash
+- `move`: moves files to `targetFolderId` (or root if null)
+- `star`: marks files as starred
+- `unstar`: removes star status
+- `purge`: permanently deletes files and their chunk records
+
+---
+
+### 5. Public Sharing
+
+#### GET /api/vfs/public/:id
+Retrieves public file metadata for zero-knowledge link sharing. Does not require user authentication headers. The decryption key is never sent to the server and remains in the URL hash fragment (`#key=...`).
+
+---
+
+### 6. Telegram Inbox Dropper
+
+#### GET /api/vfs/inbox
+Retrieves unencrypted files forwarded or sent directly to the Telegram bot chat.
+
+#### POST /api/vfs/inbox/vault
+Finalizes client-side encryption of an inbox file after the client uploads the encrypted chunks.
+
+Request:
+```json
+{
+  "fileId": "file_inbox_123",
+  "totalSizeBytes": 45028,
+  "chunkCount": 1,
+  "thumbnailCipherHex": "aabb..."
+}
+```

@@ -26,6 +26,16 @@ VaultCloud TMA turns Telegram into an encrypted personal drive with a folder hie
 - Telegram Mini App integration with automatic theme matching and haptic feedback
 - Docker support with multi-stage builds and compose files
 
+## Advanced Features
+
+- Zero-Knowledge Link Sharing: Share individual encrypted files using URL hash fragments (`#share=...&key=...`). Browsers never transmit hash fragments over HTTP, ensuring relays and servers cannot read shared keys.
+- Client-Side Encrypted Photo Thumbnails: Images generate 140x140 WebP thumbnails resized and encrypted in the browser for high-speed grid browsing without downloading full multi-megabyte image assets.
+- Telegram Chat Inbox Drop: Users can forward documents or photos straight to the Telegram bot chat. The files are stored in an Inbox queue and can be vaulted with full client-side encryption in one tap.
+- Multi-File Batch Actions & In-Memory ZIP: Multi-select files to star, move, trash, or package into an in-memory decrypted ZIP archive using JSZip.
+- In-Vault Encrypted Markdown Notes: Create and edit secure text or Markdown notes in place without external editor dependencies.
+- Quick PIN Lock & Auto-Lock Timer: Set an optional 4-digit PIN for quick unlocks and configure inactivity timeouts that purge cryptographic keys from memory when idle.
+- Full Vault Export: Download a disaster recovery ZIP package containing all decrypted files and a structured JSON metadata manifest.
+
 ## Architecture
 
 ```

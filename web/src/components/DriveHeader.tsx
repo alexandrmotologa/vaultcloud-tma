@@ -11,6 +11,8 @@ import {
   Trash2,
   PieChart,
   Folder,
+  Archive,
+  KeyRound,
 } from 'lucide-react';
 import { BreadcrumbItem, VaultStatusResponse } from '../types/vfs';
 
@@ -26,6 +28,9 @@ interface DriveHeaderProps {
   onLockVault: () => void;
   onOpenStats: () => void;
   vaultStatus: VaultStatusResponse | null;
+  onOpenPinModal?: () => void;
+  onExportVault?: () => void;
+  hasPin?: boolean;
 }
 
 export const DriveHeader: React.FC<DriveHeaderProps> = ({
@@ -40,6 +45,9 @@ export const DriveHeader: React.FC<DriveHeaderProps> = ({
   onLockVault,
   onOpenStats,
   vaultStatus,
+  onOpenPinModal,
+  onExportVault,
+  hasPin,
 }) => {
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -78,6 +86,31 @@ export const DriveHeader: React.FC<DriveHeaderProps> = ({
 
         {/* Right action controls */}
         <div className="flex items-center gap-1.5">
+          {/* Export Full Vault */}
+          {onExportVault && (
+            <button
+              onClick={onExportVault}
+              title="Full Vault Export (Disaster Recovery ZIP)"
+              className="p-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 transition-colors"
+            >
+              <Archive className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* PIN Lock Configuration */}
+          {onOpenPinModal && (
+            <button
+              onClick={onOpenPinModal}
+              title={hasPin ? "Quick PIN Lock configured" : "Configure Quick PIN"}
+              className="p-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/60 transition-colors relative"
+            >
+              <KeyRound className="w-4 h-4" />
+              {hasPin && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 absolute top-1 right-1" />
+              )}
+            </button>
+          )}
+
           {/* Storage stats */}
           <button
             onClick={onOpenStats}

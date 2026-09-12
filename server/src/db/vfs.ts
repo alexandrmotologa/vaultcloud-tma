@@ -26,6 +26,8 @@ export interface FileRecord {
   chunk_count: number;
   is_starred: number;
   is_trash: number;
+  thumbnail_cipher_hex: string | null;
+  is_encrypted: number;
   created_at: number;
   updated_at: number;
 }
@@ -147,19 +149,16 @@ export class VirtualFileSystem {
   }
 
   deleteFolder(userId: string, folderId: string): void {
-    // Delete files inside folder
     const filesInFolder = this.db.prepare('SELECT id FROM files WHERE user_id = ? AND folder_id = ?').all(userId, folderId) as unknown as Array<{ id: string }>;
     for (const f of filesInFolder) {
       this.deleteFile(userId, f.id);
     }
 
-    // Recursively delete subfolders
     const subfolders = this.db.prepare('SELECT id FROM folders WHERE user_id = ? AND parent_id = ?').all(userId, folderId) as unknown as Array<{ id: string }>;
     for (const sub of subfolders) {
       this.deleteFolder(userId, sub.id);
     }
 
-    // Delete folder itself
     this.db.prepare('DELETE FROM folders WHERE user_id = ? AND id = ?').run(userId, folderId);
   }
 
@@ -174,17 +173,32 @@ export class VirtualFileSystem {
       mimeType: string;
       totalSizeBytes: number;
       chunkCount: number;
+      thumbnailCipherHex?: string | null;
+      isEncrypted?: number;
     }
   ): FileRecord {
     const id = data.id || `file_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const now = Date.now();
     const cleanFolderId = data.folderId && data.folderId !== 'root' ? data.folderId : null;
+    const isEncrypted = data.isEncrypted !== undefined ? data.isEncrypted : 1;
 
     const stmt = this.db.prepare(`
-      INSERT INTO files (id, user_id, folder_id, name, mime_type, total_size_bytes, chunk_count, is_starred, is_trash, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)
+      INSERT INTO files (id, user_id, folder_id, name, mime_type, total_size_bytes, chunk_count, is_starred, is_trash, thumbnail_cipher_hex, is_encrypted, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
     `);
-    stmt.run(id, userId, cleanFolderId, data.name, data.mimeType, data.totalSizeBytes, data.chunkCount, now, now);
+    stmt.run(
+      id,
+      userId,
+      cleanFolderId,
+      data.name,
+      data.mimeType,
+      data.totalSizeBytes,
+      data.chunkCount,
+      data.thumbnailCipherHex || null,
+      isEncrypted,
+      now,
+      now
+    );
 
     return {
       id,
@@ -196,6 +210,8 @@ export class VirtualFileSystem {
       chunk_count: data.chunkCount,
       is_starred: 0,
       is_trash: 0,
+      thumbnail_cipher_hex: data.thumbnailCipherHex || null,
+      is_encrypted: isEncrypted,
       created_at: now,
       updated_at: now,
     };
@@ -216,7 +232,7 @@ export class VirtualFileSystem {
       const term = `%${options.search.trim()}%`;
       const stmt = this.db.prepare(`
         SELECT * FROM files
-        WHERE user_id = ? AND is_trash = ? AND name LIKE ?
+        WHERE user_id = ? AND is_trash = ? AND is_encrypted = 1 AND name LIKE ?
         ORDER BY updated_at DESC
       `);
       return (stmt.all(userId, isTrash, term) as unknown as FileRecord[]) || [];
@@ -225,7 +241,7 @@ export class VirtualFileSystem {
     if (options.starred) {
       const stmt = this.db.prepare(`
         SELECT * FROM files
-        WHERE user_id = ? AND is_trash = ? AND is_starred = 1
+        WHERE user_id = ? AND is_trash = ? AND is_encrypted = 1 AND is_starred = 1
         ORDER BY updated_at DESC
       `);
       return (stmt.all(userId, isTrash) as unknown as FileRecord[]) || [];
@@ -244,14 +260,14 @@ export class VirtualFileSystem {
     if (cleanFolderId === null) {
       const stmt = this.db.prepare(`
         SELECT * FROM files
-        WHERE user_id = ? AND is_trash = 0 AND folder_id IS NULL
+        WHERE user_id = ? AND is_trash = 0 AND is_encrypted = 1 AND folder_id IS NULL
         ORDER BY updated_at DESC
       `);
       return (stmt.all(userId) as unknown as FileRecord[]) || [];
     } else {
       const stmt = this.db.prepare(`
         SELECT * FROM files
-        WHERE user_id = ? AND is_trash = 0 AND folder_id = ?
+        WHERE user_id = ? AND is_trash = 0 AND is_encrypted = 1 AND folder_id = ?
         ORDER BY updated_at DESC
       `);
       return (stmt.all(userId, cleanFolderId) as unknown as FileRecord[]) || [];
@@ -267,6 +283,15 @@ export class VirtualFileSystem {
     return { ...file, chunks };
   }
 
+  getFilePublic(fileId: string): (FileRecord & { chunks: ChunkRecord[] }) | null {
+    const fileStmt = this.db.prepare('SELECT * FROM files WHERE id = ?');
+    const file = fileStmt.get(fileId) as unknown as FileRecord | undefined;
+    if (!file) return null;
+
+    const chunks = this.getChunks(fileId);
+    return { ...file, chunks };
+  }
+
   updateFile(
     userId: string,
     fileId: string,
@@ -275,6 +300,7 @@ export class VirtualFileSystem {
       folderId?: string | null;
       isStarred?: boolean;
       isTrash?: boolean;
+      thumbnailCipherHex?: string | null;
     }
   ): FileRecord | null {
     const existing = this.db.prepare('SELECT * FROM files WHERE user_id = ? AND id = ?').get(userId, fileId) as unknown as FileRecord | undefined;
@@ -284,14 +310,15 @@ export class VirtualFileSystem {
     const newFolderId = updates.folderId !== undefined ? (updates.folderId === 'root' ? null : updates.folderId) : existing.folder_id;
     const newStarred = updates.isStarred !== undefined ? (updates.isStarred ? 1 : 0) : existing.is_starred;
     const newTrash = updates.isTrash !== undefined ? (updates.isTrash ? 1 : 0) : existing.is_trash;
+    const newThumbnail = updates.thumbnailCipherHex !== undefined ? updates.thumbnailCipherHex : existing.thumbnail_cipher_hex;
     const now = Date.now();
 
     const stmt = this.db.prepare(`
       UPDATE files
-      SET name = ?, folder_id = ?, is_starred = ?, is_trash = ?, updated_at = ?
+      SET name = ?, folder_id = ?, is_starred = ?, is_trash = ?, thumbnail_cipher_hex = ?, updated_at = ?
       WHERE user_id = ? AND id = ?
     `);
-    stmt.run(newName, newFolderId, newStarred, newTrash, now, userId, fileId);
+    stmt.run(newName, newFolderId, newStarred, newTrash, newThumbnail, now, userId, fileId);
 
     return {
       ...existing,
@@ -299,6 +326,7 @@ export class VirtualFileSystem {
       folder_id: newFolderId,
       is_starred: newStarred,
       is_trash: newTrash,
+      thumbnail_cipher_hex: newThumbnail,
       updated_at: now,
     };
   }
@@ -306,6 +334,70 @@ export class VirtualFileSystem {
   deleteFile(userId: string, fileId: string): void {
     this.db.prepare('DELETE FROM chunks WHERE file_id = ?').run(fileId);
     this.db.prepare('DELETE FROM files WHERE user_id = ? AND id = ?').run(userId, fileId);
+  }
+
+  // --- Batch Operations ---
+
+  batchTrash(userId: string, fileIds: string[], isTrash: boolean): void {
+    const val = isTrash ? 1 : 0;
+    const now = Date.now();
+    const stmt = this.db.prepare('UPDATE files SET is_trash = ?, updated_at = ? WHERE user_id = ? AND id = ?');
+    for (const id of fileIds) {
+      stmt.run(val, now, userId, id);
+    }
+  }
+
+  batchMove(userId: string, fileIds: string[], targetFolderId: string | null): void {
+    const cleanFolderId = targetFolderId && targetFolderId !== 'root' ? targetFolderId : null;
+    const now = Date.now();
+    const stmt = this.db.prepare('UPDATE files SET folder_id = ?, updated_at = ? WHERE user_id = ? AND id = ?');
+    for (const id of fileIds) {
+      stmt.run(cleanFolderId, now, userId, id);
+    }
+  }
+
+  batchPurge(userId: string, fileIds: string[]): void {
+    for (const id of fileIds) {
+      this.deleteFile(userId, id);
+    }
+  }
+
+  batchStar(userId: string, fileIds: string[], isStarred: boolean): void {
+    const val = isStarred ? 1 : 0;
+    const now = Date.now();
+    const stmt = this.db.prepare('UPDATE files SET is_starred = ?, updated_at = ? WHERE user_id = ? AND id = ?');
+    for (const id of fileIds) {
+      stmt.run(val, now, userId, id);
+    }
+  }
+
+  // --- Inbox Operations ---
+
+  getInboxFiles(userId: string): FileRecord[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM files
+      WHERE user_id = ? AND is_encrypted = 0
+      ORDER BY created_at DESC
+    `);
+    return (stmt.all(userId) as unknown as FileRecord[]) || [];
+  }
+
+  vaultInboxFile(
+    userId: string,
+    fileId: string,
+    updates: {
+      totalSizeBytes: number;
+      chunkCount: number;
+      thumbnailCipherHex?: string | null;
+    }
+  ): void {
+    const now = Date.now();
+    const stmt = this.db.prepare(`
+      UPDATE files
+      SET is_encrypted = 1, total_size_bytes = ?, chunk_count = ?, thumbnail_cipher_hex = ?, updated_at = ?
+      WHERE user_id = ? AND id = ?
+    `);
+    stmt.run(updates.totalSizeBytes, updates.chunkCount, updates.thumbnailCipherHex || null, now, userId, fileId);
   }
 
   // --- Chunk Management ---
@@ -348,20 +440,17 @@ export class VirtualFileSystem {
   seedDemoData(userId: string): void {
     const existing = this.getUserVault(userId);
     if (existing) {
-      return; // Already initialized
+      return;
     }
 
-    // Default demo salt: 16 zero-padded bytes
     const demoSaltHex = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
     this.saveUserVault(userId, demoSaltHex);
 
-    // Create folders
     const workDocs = this.createFolder(userId, 'Work Documents', null);
     const photos = this.createFolder(userId, 'Photos', null);
     const backups = this.createFolder(userId, 'Vault Backups', null);
     this.createFolder(userId, 'Q4 Financials', workDocs.id);
 
-    // Seed sample files
     this.createFile(userId, {
       id: 'file_demo_1',
       folderId: workDocs.id,
@@ -391,7 +480,7 @@ export class VirtualFileSystem {
 
     this.createFile(userId, {
       id: 'file_demo_4',
-      folderId: null, // Root file
+      folderId: null,
       name: 'welcome_to_vaultcloud.md',
       mimeType: 'text/markdown',
       totalSizeBytes: 4500,

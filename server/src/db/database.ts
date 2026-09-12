@@ -50,7 +50,7 @@ export function initSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_folders_user_parent ON folders(user_id, parent_id);
   `);
 
-  // Virtual file metadata
+  // Virtual file metadata with thumbnail cipher and encryption flag
   db.exec(`
     CREATE TABLE IF NOT EXISTS files (
       id TEXT PRIMARY KEY,
@@ -62,6 +62,8 @@ export function initSchema(db: DatabaseSync): void {
       chunk_count INTEGER NOT NULL,
       is_starred INTEGER DEFAULT 0,
       is_trash INTEGER DEFAULT 0,
+      thumbnail_cipher_hex TEXT,
+      is_encrypted INTEGER DEFAULT 1,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE
@@ -70,6 +72,25 @@ export function initSchema(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_files_trash ON files(user_id, is_trash);
     CREATE INDEX IF NOT EXISTS idx_files_starred ON files(user_id, is_starred);
   `);
+
+  // Run migrations safely for existing tables
+  try {
+    db.exec('ALTER TABLE files ADD COLUMN thumbnail_cipher_hex TEXT;');
+  } catch {
+    // Column already exists
+  }
+  try {
+    db.exec('ALTER TABLE files ADD COLUMN is_encrypted INTEGER DEFAULT 1;');
+  } catch {
+    // Column already exists
+  }
+
+  // Create index on migrated column
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_files_encrypted ON files(user_id, is_encrypted);');
+  } catch {
+    // Ignore if already created
+  }
 
   // Ordered encrypted chunk records
   db.exec(`

@@ -20,7 +20,8 @@ export function createTelegramBot(vfs: VirtualFileSystem): Bot | null {
       `Features:\n` +
       `- Client-side AES-GCM-256 encryption via WebCrypto\n` +
       `- Unlimited Telegram document storage\n` +
-      `- Virtual folders, breadcrumb navigation, and in-memory media previews\n\n` +
+      `- Direct chat document drop (Inbox)\n` +
+      `- In-memory media previews and ZIP downloads\n\n` +
       `Click below to launch your encrypted drive:`,
       { reply_markup: keyboard }
     );
@@ -51,12 +52,73 @@ export function createTelegramBot(vfs: VirtualFileSystem): Bot | null {
   bot.command('help', async (ctx) => {
     await ctx.reply(
       `VaultCloud TMA Help & Security:\n\n` +
-      `1. Zero-Knowledge: Your files are sliced into 10MB chunks and encrypted with AES-GCM-256 inside your browser.\n` +
-      `2. Passphrase: Your master key is derived with PBKDF2 (100,000 iterations). Plaintext files never reach the server.\n` +
+      `1. Zero-Knowledge: Files are sliced into 10MB chunks and encrypted with AES-GCM-256 inside your browser.\n` +
+      `2. Inbox Dropper: Forward any file directly to this bot to save it in your Inbox, then encrypt it in the Mini App.\n` +
       `3. Commands:\n` +
       `  /drive - Open the Mini App\n` +
       `  /quota - View storage stats\n` +
       `  /help - View security information`
+    );
+  });
+
+  // Ingest incoming documents directly dropped into chat
+  bot.on('message:document', async (ctx) => {
+    const doc = ctx.message.document;
+    const userId = `tg_${ctx.from?.id}`;
+
+    const fileId = `file_inbox_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    vfs.createFile(userId, {
+      id: fileId,
+      name: doc.file_name || 'unnamed_document',
+      mimeType: doc.mime_type || 'application/octet-stream',
+      totalSizeBytes: doc.file_size || 0,
+      chunkCount: 1,
+      isEncrypted: 0, // Pending client-side encryption in Mini App
+    });
+
+    vfs.addChunk({
+      fileId,
+      chunkIndex: 0,
+      telegramFileId: doc.file_id,
+      sizeBytes: doc.file_size || 0,
+      sha256Hash: '',
+    });
+
+    const keyboard = new InlineKeyboard().webApp('Open Vault & Encrypt', config.appUrl);
+    await ctx.reply(
+      `Received "${doc.file_name}" into your Vault Inbox!\n\nOpen VaultCloud to encrypt it with your master key.`,
+      { reply_markup: keyboard }
+    );
+  });
+
+  // Ingest incoming photos directly dropped into chat
+  bot.on('message:photo', async (ctx) => {
+    const photos = ctx.message.photo;
+    const largestPhoto = photos[photos.length - 1];
+    const userId = `tg_${ctx.from?.id}`;
+
+    const fileId = `file_inbox_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    vfs.createFile(userId, {
+      id: fileId,
+      name: `photo_${Date.now()}.jpg`,
+      mimeType: 'image/jpeg',
+      totalSizeBytes: largestPhoto.file_size || 0,
+      chunkCount: 1,
+      isEncrypted: 0,
+    });
+
+    vfs.addChunk({
+      fileId,
+      chunkIndex: 0,
+      telegramFileId: largestPhoto.file_id,
+      sizeBytes: largestPhoto.file_size || 0,
+      sha256Hash: '',
+    });
+
+    const keyboard = new InlineKeyboard().webApp('Open Vault & Encrypt', config.appUrl);
+    await ctx.reply(
+      `Photo added to your Vault Inbox! Open VaultCloud to encrypt and store it.`,
+      { reply_markup: keyboard }
     );
   });
 
