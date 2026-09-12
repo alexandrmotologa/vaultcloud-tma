@@ -1,23 +1,103 @@
-# VaultCloud TMA
+<p align="center">
+  <img src="docs/images/logo.png?raw=true" alt="VaultCloud TMA Logo" width="130" style="border-radius: 26px;" />
+</p>
 
-Zero-knowledge encrypted personal cloud drive Telegram Mini App backed by Telegram's free, unlimited 2GB file storage.
+<h1 align="center">VaultCloud TMA</h1>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![Fastify](https://img.shields.io/badge/Fastify-5.x-black)](https://fastify.dev/)
-[![React](https://img.shields.io/badge/React-19-61dafb)](https://react.dev/)
+<p align="center">
+  <strong>Zero-knowledge encrypted personal cloud drive Telegram Mini App backed by Telegram's free, unlimited 2GB file storage.</strong>
+</p>
+
+<p align="center">
+  <a href="#application-demo"><img src="https://img.shields.io/badge/Demo-Live%20Preview-blue.svg" alt="Live Demo" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-emerald.svg" alt="License: MIT" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-3178c6.svg" alt="TypeScript" /></a>
+  <a href="https://fastify.dev/"><img src="https://img.shields.io/badge/Fastify-5.x-000000.svg" alt="Fastify" /></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-61dafb.svg" alt="React" /></a>
+</p>
 
 ---
 
 ## Overview
 
-Telegram provides unlimited cloud file storage with single file uploads up to 2GB, but files are stored in unorganized chat histories and readable by Telegram servers.
+Telegram provides unlimited cloud file storage with single file uploads up to 2GB. However, files sit in unorganized chat histories where Telegram servers can read them in plaintext.
 
-VaultCloud TMA turns Telegram into an encrypted personal drive with a folder hierarchy, search, and client-side encryption. Files are split into 10MB chunks and encrypted with AES-GCM-256 inside the browser before leaving the device. The server and Telegram see only encrypted binary chunks.
+VaultCloud TMA transforms Telegram into a private encrypted cloud drive with folder trees, instant search, and client-side encryption. Files are split into 10MB chunks and encrypted with AES-GCM-256 inside the browser before ever leaving the device. The relay server and Telegram see only encrypted binary blobs.
+
+<p align="center" id="application-demo">
+  <img src="docs/images/demo.gif?raw=true" alt="VaultCloud TMA Animated Walkthrough" width="900" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);" />
+</p>
+
+---
+
+## Mascot: Aegis Pangolin
+
+<p align="center">
+  <img src="docs/images/logo.svg" alt="Aegis Pangolin - The Armored Vault Guardian" width="160" />
+</p>
+
+The official mascot of VaultCloud TMA is the **Aegis Pangolin ("The Armored Vault Guardian")**.
+
+The pangolin embodies natural biological encryption. When facing threats, it curls into a sphere of overlapping, impenetrable keratin armor scales. In the exact same manner, VaultCloud protects user data by segmenting large files into 10MB interlocking encrypted chunks guarded by client-side WebCrypto keys.
+
+---
+
+## Visual Showcase
+
+### 1. Drive Interface & Folder Hierarchy
+The primary drive workspace provides folder navigation, breadcrumb paths, search filters, and real-time storage metrics.
+
+<p align="center">
+  <img src="docs/images/screenshot_drive.png?raw=true" alt="Drive Interface" width="850" style="border-radius: 10px;" />
+</p>
+
+### 2. In-Vault Encrypted Markdown Notes
+Write and edit sensitive notes directly in the drive. Notes encrypt on the fly with AES-GCM-256 before uploading to Telegram.
+
+<p align="center">
+  <img src="docs/images/screenshot_note_editor.png?raw=true" alt="Note Editor" width="850" style="border-radius: 10px;" />
+</p>
+
+### 3. In-Memory Decrypted Document Viewer
+Files decrypt directly into memory using WebCrypto and temporary object URLs. Nothing gets written to local unencrypted storage.
+
+<p align="center">
+  <img src="docs/images/screenshot_preview_modal.png?raw=true" alt="File Preview Modal" width="850" style="border-radius: 10px;" />
+</p>
+
+### 4. Storage Analytics & Quota Breakdown
+Real-time breakdown of stored assets across documents, media, images, and archives alongside Telegram's unlimited storage capacity.
+
+<p align="center">
+  <img src="docs/images/screenshot_storage.png?raw=true" alt="Storage Analytics Modal" width="850" style="border-radius: 10px;" />
+</p>
+
+### 5. Quick PIN Lock & Inactivity Timeout
+Configure a 4-digit PIN for rapid session access and set automatic timeout rules that purge encryption keys from browser memory when idle.
+
+<p align="center">
+  <img src="docs/images/screenshot_pin_lock.png?raw=true" alt="PIN Lock Modal" width="850" style="border-radius: 10px;" />
+</p>
+
+### 6. Multi-File Batch Actions & Decrypted ZIP Export
+Select multiple files simultaneously to star, move, trash, or compress into a single in-memory ZIP package.
+
+<p align="center">
+  <img src="docs/images/screenshot_batch_actions.png?raw=true" alt="Batch Operations Bar" width="850" style="border-radius: 10px;" />
+</p>
+
+### 7. Zero-Knowledge Vault Authentication
+Unlocks the client cryptographic engine using PBKDF2 key derivation with 100,000 SHA-256 rounds. Passphrases never leave device RAM.
+
+<p align="center">
+  <img src="docs/images/screenshot_unlock.png?raw=true" alt="Vault Unlock Screen" width="850" style="border-radius: 10px;" />
+</p>
+
+---
 
 ## Core Features
 
-- Client-side AES-GCM-256 encryption via the WebCrypto API
+- Client-side AES-GCM-256 encryption via the standard WebCrypto API
 - Master key derivation with PBKDF2 (100,000 rounds, SHA-256, and random salt)
 - Virtual file system with nested folders, search, breadcrumbs, favorites, and trash bin
 - Automatic 10MB chunking to handle multi-gigabyte uploads over Telegram Bot API
@@ -84,7 +164,8 @@ Open `http://localhost:8080` in your browser. Use the demo passphrase `DemoPassw
 
 ```
 vaultcloud-tma/
-├── docs/                     # Architecture, security, API, and deployment documentation
+├── docs/                     # Architecture, security, API, deployment guides, and UI media
+│   └── images/               # Official branding logo, screenshots, and demo GIF
 ├── server/                   # Fastify backend, SQLite VFS, and grammY Telegram bot
 │   ├── src/
 │   │   ├── bot/              # Telegram bot commands and long polling

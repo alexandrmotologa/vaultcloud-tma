@@ -26,5 +26,8 @@
     "grammy"
   ],
   "author": "Alexandr Motologa",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
 }

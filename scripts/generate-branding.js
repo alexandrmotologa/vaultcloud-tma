@@ -1,0 +1,207 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { Resvg } from '@resvg/resvg-js';
+
+function buildLogoSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Luxury Squircle Clip -->
+    <clipPath id="squircle-clip">
+      <rect x="24" y="24" width="976" height="976" rx="220" />
+    </clipPath>
+
+    <!-- Electric Cyan Gradient -->
+    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f5ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <!-- Obsidian Slate Shading Gradients -->
+    <linearGradient id="plate-light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <linearGradient id="plate-mid" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="plate-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <linearGradient id="plate-deep" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#070b14"/>
+    </linearGradient>
+
+    <!-- Subtle Drop Shadow -->
+    <filter id="subtle-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.16" />
+    </filter>
+  </defs>
+
+  <!-- Luxury White Squircle Container -->
+  <rect x="24" y="24" width="976" height="976" rx="220" fill="#ffffff" stroke="#e2e8f0" stroke-width="6" />
+
+  <g clip-path="url(#squircle-clip)">
+    <g transform="translate(512, 512)" filter="url(#subtle-shadow)">
+
+      <!-- Hexagonal Architectural Gateway Frame -->
+      <polygon points="
+        0,-390
+        338,-195
+        338,195
+        0,390
+        -338,195
+        -338,-195
+      " fill="none" stroke="#0f172a" stroke-width="36" stroke-linejoin="round" />
+
+      <!-- Inner Precision Telemetry Ring -->
+      <polygon points="
+        0,-355
+        307,-177
+        307,177
+        0,355
+        -307,177
+        -307,-177
+      " fill="none" stroke="#00f5ff" stroke-width="3.5" opacity="0.45" stroke-dasharray="14, 10" />
+
+      <!-- 100% Watertight Solid Base Silhouette (Zero-Leak Rule) -->
+      <path d="
+        M 0,-240
+        L 55,-215 L 120,-160 L 195,-95 L 260,-10 L 285,110 L 265,225 L 205,305 L 115,350 L 0,365
+        L -115,350 L -205,305 L -265,225 L -285,110 L -260,-10 L -195,-95 L -120,-160 L -55,-215 Z
+      " fill="#070b14" />
+
+      <!-- OUTER CARAPACE: Tier 3 (Broad Shoulder Plates) -->
+      <!-- Left Outer Shoulder -->
+      <polygon points="120,-160 195,-95 155,0 80,-40" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="195,-95 260,-10 215,80 155,0" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="260,-10 285,110 210,170 215,80" fill="url(#plate-deep)" stroke="#070b14" stroke-width="2" />
+      <polygon points="285,110 265,225 185,245 210,170" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="265,225 205,305 135,290 185,245" fill="url(#plate-deep)" stroke="#070b14" stroke-width="2" />
+      <polygon points="205,305 115,350 70,305 135,290" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+
+      <!-- Right Outer Shoulder (Symmetrical) -->
+      <polygon points="-120,-160 -195,-95 -155,0 -80,-40" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-195,-95 -260,-10 -215,80 -155,0" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-260,-10 -285,110 -210,170 -215,80" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-285,110 -265,225 -185,245 -210,170" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-265,225 -205,305 -135,290 -185,245" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-205,305 -115,350 -70,305 -135,290" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+
+      <!-- MID CARAPACE: Tier 2 (Inner Armor Facets) -->
+      <polygon points="80,-40 155,0 135,110 65,70" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+      <polygon points="155,0 215,80 170,165 135,110" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="135,110 170,165 135,230 75,185" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="75,185 135,230 115,295 55,260" fill="url(#plate-deep)" stroke="#070b14" stroke-width="2" />
+
+      <polygon points="-80,-40 -155,0 -135,110 -65,70" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-155,0 -215,80 -170,165 -135,110" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-135,110 -170,165 -135,230 -75,185" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-75,185 -135,230 -115,295 -55,260" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+
+      <!-- HEAD & CREST: Tier 1 (Cranial Plates & Muzzle) -->
+      <!-- Center Crown Plate -->
+      <polygon points="0,-240 55,-215 45,-155 0,-175" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+      <polygon points="0,-240 -55,-215 -45,-155 0,-175" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+
+      <!-- Upper Brow Facets -->
+      <polygon points="55,-215 120,-160 85,-115 45,-155" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-55,-215 -120,-160 -85,-115 -45,-155" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+
+      <!-- Nasal Bridge (Center Ridge) -->
+      <polygon points="0,-175 45,-155 35,-65 0,-85" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+      <polygon points="0,-175 -45,-155 -35,-65 0,-85" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+
+      <!-- Snout Tip / Muzzle -->
+      <polygon points="0,-85 35,-65 25,-15 0,-25" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="0,-85 -35,-65 -25,-15 0,-25" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+
+      <!-- Cheek Armor Plates -->
+      <polygon points="45,-155 85,-115 70,-45 35,-65" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="-45,-155 -85,-115 -70,-45 -35,-65" fill="url(#plate-light)" stroke="#070b14" stroke-width="2" />
+
+      <!-- PREDATOR CYBER OPTICS (Almond Eyes with Electric Cyan Gradient) -->
+      <!-- Left Eye -->
+      <polygon points="38,-72 76,-85 82,-70 44,-58" fill="url(#cyan-glow)" />
+      <!-- Right Eye -->
+      <polygon points="-38,-72 -76,-85 -82,-70 -44,-58" fill="url(#cyan-glow)" />
+
+      <!-- Eye Glow Accents (Subtle Pupils) -->
+      <polygon points="48,-73 66,-79 63,-68 47,-64" fill="#ffffff" opacity="0.8" />
+      <polygon points="-48,-73 -66,-79 -63,-68 -47,-64" fill="#ffffff" opacity="0.8" />
+
+      <!-- CORE VAULT BREASTPLATE: Negative-Space Keyhole Shield -->
+      <!-- Central Shield Outer Hexagon -->
+      <polygon points="
+        0,30
+        70,68
+        70,165
+        0,210
+        -70,165
+        -70,68
+      " fill="#0b0f19" stroke="#00f5ff" stroke-width="3" stroke-linejoin="round" />
+
+      <!-- Central Shield Internal Facets -->
+      <polygon points="0,30 70,68 0,110" fill="url(#plate-light)" opacity="0.9" />
+      <polygon points="0,30 -70,68 0,110" fill="url(#plate-mid)" opacity="0.9" />
+      <polygon points="70,68 70,165 0,110" fill="url(#plate-dark)" opacity="0.9" />
+      <polygon points="-70,68 -70,165 0,110" fill="url(#plate-deep)" opacity="0.9" />
+      <polygon points="0,210 70,165 0,110" fill="url(#plate-mid)" opacity="0.9" />
+      <polygon points="0,210 -70,165 0,110" fill="url(#plate-dark)" opacity="0.9" />
+
+      <!-- THE CIPHER KEYHOLE (Subtle Cryptographic Negative Space) -->
+      <!-- Top circle / hex of keyhole -->
+      <circle cx="0" cy="98" r="16" fill="url(#cyan-glow)" />
+      <!-- Bottom slot of keyhole -->
+      <polygon points="
+        -9,104
+        9,104
+        14,142
+        -14,142
+      " fill="url(#cyan-glow)" />
+
+      <!-- Tail / Base Armor Plates -->
+      <polygon points="0,210 55,260 0,310 -55,260" fill="url(#plate-mid)" stroke="#070b14" stroke-width="2" />
+      <polygon points="0,310 55,260 70,305 0,365" fill="url(#plate-dark)" stroke="#070b14" stroke-width="2" />
+      <polygon points="0,310 -55,260 -70,305 0,365" fill="url(#plate-deep)" stroke="#070b14" stroke-width="2" />
+
+      <!-- Electric Cyan Facet Accents (Edge Highlights) -->
+      <line x1="0" y1="-240" x2="0" y2="-85" stroke="#00f5ff" stroke-width="2.5" opacity="0.75" />
+      <line x1="0" y1="210" x2="0" y2="365" stroke="#00f5ff" stroke-width="2" opacity="0.6" />
+      <polyline points="0,30 70,68 70,165 0,210 -70,165 -70,68 0,30" fill="none" stroke="#00f5ff" stroke-width="2.5" opacity="0.85" />
+    </g>
+  </g>
+</svg>`;
+}
+
+async function renderLogo() {
+  const outputDir = path.resolve(process.cwd(), 'docs/images');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const svg = buildLogoSvg();
+  const svgPath = path.join(outputDir, 'logo.svg');
+  const pngPath = path.join(outputDir, 'logo.png');
+
+  fs.writeFileSync(svgPath, svg);
+  console.log(`✓ Saved ${svgPath}`);
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: 'width', value: 1024 },
+  });
+  const pngData = resvg.render().asPng();
+  fs.writeFileSync(pngPath, pngData);
+  console.log(`✓ Rendered and saved ${pngPath} (1024x1024)`);
+}
+
+renderLogo().catch((err) => {
+  console.error('Error rendering branding logo:', err);
+  process.exit(1);
+});
