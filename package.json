@@ -1,0 +1,30 @@
+{
+  "name": "vaultcloud-tma",
+  "version": "1.0.0",
+  "description": "Zero-knowledge encrypted personal cloud drive Telegram Mini App backed by Telegram unlimited storage",
+  "private": true,
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=server",
+    "dev:web": "npm run dev --workspace=web",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "start": "npm run start --workspace=server"
+  },
+  "keywords": [
+    "telegram-mini-app",
+    "zero-knowledge",
+    "cloud-storage",
+    "encryption",
+    "webcrypto",
+    "aes-gcm",
+    "fastify",
+    "react",
+    "grammy"
+  ],
+  "author": "Alexandr Motologa",
+  "license": "MIT"
+}
