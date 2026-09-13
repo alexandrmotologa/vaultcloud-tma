@@ -42,7 +42,7 @@ The pangolin embodies natural biological encryption. When facing threats, it cur
 
 ---
 
-## Visual Showcase
+## Interface Preview
 
 ### 1. Drive Interface & Folder Hierarchy
 The primary drive workspace provides folder navigation, breadcrumb paths, search filters, and real-time storage metrics.
